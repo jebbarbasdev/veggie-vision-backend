@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from mqtt_client import mqtt_client_instance
+from image_analyzer import image_analyzer
 from ripening_analyzer import ripening_analyzer
-from models import AmbientData, PredictionRequest, RipeningAnalysis
+from models import AmbientData, AnalysisResponse
 
 router = APIRouter()
 
@@ -39,31 +40,53 @@ async def ambient_endpoint() -> AmbientData:
     return get_ambient()
 
 @router.post(
-    "/analyze-ripening",
-    response_model=RipeningAnalysis,
-    summary="Analyze produce ripening",
-    description="""
-    Analyze the ripening status of produce based on current conditions.
-    Uses GPT to predict days until ripe and spoiled.
-    """
+    "/analysis",
+    response_model=AnalysisResponse,
+    summary="Analyze produce image",
+    description="Analyze a produce image and return prediction, confidence, and ripening analysis. Combines image analysis with current ambient conditions."
 )
-async def analyze_ripening(request: PredictionRequest) -> RipeningAnalysis:
+async def analyze_produce(
+    file: UploadFile = File(...),
+    user_id: str = Form(...)
+) -> AnalysisResponse:
     """
-    Analyze ripening status of produce using current conditions.
+    Analyze a produce image and return comprehensive analysis.
     
     Args:
-        request: Prediction and current environmental conditions
+        file: The image file to analyze
+        user_id: Firebase user ID (not used in current implementation)
         
     Returns:
-        Analysis of days until ripe and spoiled
+        AnalysisResponse with prediction, confidence, and ripening analysis
         
     Raises:
         HTTPException: If analysis fails
     """
     try:
-        return ripening_analyzer.analyze_ripening(request)
+        # 1. Analyze image
+        prediction, confidence = await image_analyzer.analyze_image(file)
+        
+        # 2. Get ambient data
+        ambient_data = get_ambient()
+        
+        # 3. Analyze ripening
+        category, ripes_in_days, spoils_in_days = ripening_analyzer.analyze_ripening_with_ambient_data(
+            prediction, ambient_data
+        )
+        
+        # 4. Combine all data
+        return AnalysisResponse(
+            prediction=prediction,
+            confidence=confidence,
+            temperature=ambient_data.temperature,
+            humidity=ambient_data.humidity,
+            category=category,
+            ripes_in_days=ripes_in_days,
+            spoils_in_days=spoils_in_days
+        )
+        
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to analyze ripening: {str(e)}"
+            detail=f"Failed to analyze produce: {str(e)}"
         ) 

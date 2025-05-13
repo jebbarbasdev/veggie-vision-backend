@@ -1,37 +1,33 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Literal
 
 class AmbientData(BaseModel):
     """Model for ambient data with temperature and humidity readings."""
-    temperature: int = Field(..., description="Temperature value")
-    humidity: int = Field(..., description="Humidity value")
+    temperature: float = Field(..., description="Temperature in Celsius")
+    humidity: float = Field(..., description="Humidity percentage")
 
     @classmethod
     def from_spanish(cls, data: dict) -> "AmbientData":
-        """Convert Spanish field names to English."""
+        """
+        Create AmbientData from Spanish field names.
+        
+        Args:
+            data: Dictionary with 'temperatura' and 'humedad' fields
+            
+        Returns:
+            AmbientData instance with English field names
+        """
         return cls(
-            temperature=data["temperatura"],
-            humidity=data["humedad"]
+            temperature=float(data["temperatura"]),
+            humidity=float(data["humedad"])
         )
 
-class RipeningAnalysis(BaseModel):
-    """Model for ripening analysis response."""
-    days_to_ripe: Optional[int] = Field(
-        None,
-        description="Number of days until the produce is ripe. Null if already ripe.",
-        ge=0
-    )
-    days_to_spoil: Optional[int] = Field(
-        None,
-        description="Number of days until the produce spoils. Null if already spoiled.",
-        ge=0
-    )
-
-class PredictionRequest(BaseModel):
-    """Model for ripening prediction request."""
-    prediction: str = Field(..., description="Model prediction (e.g., 'ripe_banana')")
-    temperature: int = Field(..., description="Current temperature in Celsius")
-    humidity: int = Field(..., description="Current humidity percentage")
-
-    class Config:
-        populate_by_name = True 
+class AnalysisResponse(BaseModel):
+    """Model for the analysis endpoint response."""
+    prediction: str = Field(..., description="Predicted produce and ripeness state (e.g., 'unripe_banana')")
+    confidence: float = Field(..., ge=0, le=100, description="Confidence score of the prediction (0-100)")
+    temperature: float = Field(..., description="Current temperature in Celsius")
+    humidity: float = Field(..., description="Current humidity percentage")
+    category: Literal["fruit", "vegetable"] = Field(..., description="Category of the produce")
+    ripes_in_days: int = Field(..., ge=0, description="Estimated days until ripe")
+    spoils_in_days: int = Field(..., ge=0, description="Estimated days until spoiled") 
